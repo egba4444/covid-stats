@@ -56,8 +56,15 @@ functions:
     timeout: 300
   downloadcsv:
     handler: etl.handler
+    events:
+      - s3:
+        bucket: 'testbucket01234567899999'
+        event: s3:ObjectCreated:*
+        existing: true
   githubdownload:
     handler: githubdown.handler
+    events:
+      - schedule: rate(24 hours)
 
 
 resources:

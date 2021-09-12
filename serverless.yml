@@ -1,0 +1,85 @@
+service: projectcovid
+
+plugins:  
+  - serverless-python-requirements
+  - serverless-wsgi
+custom:
+  tableName: 'coviddata-table-${self:provider.stage}'
+  wsgi:
+    app: app.app
+    packRequirements: false
+  pythonRequirements:
+    dockerizePip: non-linux
+    pythonBin: python3
+
+provider:
+  name: aws
+  runtime: python3.8
+  stage: dev
+  region: us-east-1
+  lambdaHashingVersion: 20201221 
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:BatchWriteItem
+        - dynamodb:DescribeTable
+        - "s3:*"
+      Resource:
+        - ' arn:aws:dynamodb:us-east-1:572927506162:table/covid-data2'
+        - ' arn:aws:sts::572927506162:assumed-role/projectcovid-dev-us-east-1-lambdaRole/projectcovid-dev-initialload' 
+        - { "Fn::Join": ["", ["arn:aws:s3:::testbucket01234567899999", "/*" ] ] }
+    - Effect: "Allow"
+      Action:
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+      Resource: 
+        - 'arn:aws:iam::572927506162:role/projectcovid-dev-us-east-1-lambdaRole'
+        - 'arn:aws:sts::572927506162:assumed-role/projectcovid-dev-us-east-1-lambdaRole/projectcovid-dev-initialload' 
+  environment:
+    COVID_DATA_TABLE: ${self:custom.tableName}
+
+functions:
+  rest:
+    handler: rest.handler
+    events:
+      - http: 
+          path: /data
+          method: get
+  initialload:
+    handler: initial.handler
+    timeout: 300
+  downloadcsv:
+    handler: etl.handler
+  githubdownload:
+    handler: githubdown.handler
+
+
+resources:
+  Resources:
+    CovidDataUS:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        TableName: covid-data2
+        AttributeDefinitions:
+          -
+            AttributeName: 'date'
+            AttributeType: 'S'
+        KeySchema:
+          -
+            AttributeName: 'date'
+            KeyType: 'HASH'
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+    Bucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: 'testbucket01234567899999'
+        VersioningConfiguration:
+          Status: Enabled
